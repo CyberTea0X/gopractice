@@ -1,0 +1,23 @@
+[app]
+port = "8080"
+timeout_seconds = 15
+
+[database]
+host = "localhost"
+port = "5432"
+user = "postgres"
+password = "test"
+database = "postgres"
+sslmode = "disable"
+
+[tokens]
+
+[tokens.access]
+lifespan_minute = 15
+secret = "secret1"
+
+[tokens.refresh]
+lifespan_hour = 8790
+secret = "secret2"
+[sms_codes]
+lifespan_minute = 5

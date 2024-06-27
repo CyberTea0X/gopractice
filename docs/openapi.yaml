@@ -1,0 +1,275 @@
+openapi: 3.1.1
+info:
+  title: Simple Golang Authorization service
+  description: Service that uses JWT refresh and access tokens to authenticate users and simulates sms codes
+  version: 1.0.0
+servers:
+  - url: "http://127.0.0.1/api"
+components:
+  schemas:
+    # Errors
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: integer
+        data:
+          type: object
+    # Properties
+    ExpiresAt:
+      type: integer
+      format: int64
+      description: "Unix timestamp when the token expires"
+      example: 1708770828470
+    Role:
+      type: string
+      description: "Any role"
+      example: "user"
+    DeviceId:
+      type: integer
+      description: "The device ID must be unique for each device the user uses."
+      example: 1
+    AccessToken:
+      type: string
+      example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MDc3NTg2MzQsInVzZXJfaWQiOjEsInJvbGVzIjpbInRlc3QiXX0.9tg2uUko5C4-CAb3QFsnPghgLDsuqDGaX2BMzqJzlMI"
+      description: "JWT access token. Try to decode it on jwt.io to see json representation. This token is required for user authentication."
+    RefreshToken:
+      type: string
+      example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NDA0MTQyODAsInRva2VuX2lkIjoxLCJkZXZpY2VfaWQiOjEyMywidXNlcl9pZCI6MSwicm9sZXMiOlsidGVzdCJdfQ.SGNTo9SgPxB-db1COU0I5C2DZ8BRV2mHr0zAZrrizHU"
+      description: "JWT refresh token. Try to decode it on jwt.io to see json representation. This token needed to generate new refresh+access pair of tokens"
+    # Output
+    LoginOutput:
+      type: object
+      properties:
+        access_token:
+          $ref: '#/components/schemas/AccessToken'
+        refresh_token:
+          $ref: '#/components/schemas/RefreshToken'
+        refresh_expires:
+          $ref: '#/components/schemas/ExpiresAt'
+        access_expires:
+          $ref: '#/components/schemas/ExpiresAt'
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+    RefreshOutput:
+      type: object
+      properties:
+        access_token:
+          $ref: '#/components/schemas/AccessToken'
+        refresh_token:
+          $ref: '#/components/schemas/RefreshToken'
+        refresh_expires:
+          $ref: '#/components/schemas/ExpiresAt'
+        access_expires:
+          $ref: '#/components/schemas/ExpiresAt'
+  examples:
+    ErrNoTokenSpecified:
+      value:
+        error: "no token specified"
+        code:  400
+      summary: "no token specified"
+    ErrInvalidToken:
+      value: 
+        error: "invalid token"
+        code: 400
+      summary: "invalid token"
+    ErrTokenExpired:
+      value: 
+        error: "token expired"
+        code: 400
+      summary: "token expired"
+    ErrInvalidJson:
+      value: 
+        error: "invalid JSON"
+        code: 400
+      summary: "invalid JSON"
+    ErrTokenNotExists:
+      value: 
+        error: "token does not exist"
+        code: 400
+      summary: "token does not exist"
+    ErrInvalidQuery:
+      value: 
+        error: "invalid query parameters"
+        code: 400
+      summary: "invalid query parameters"
+    ErrCodeAlreadySent:
+      value:
+        error: "sms code already sent, wait before requesting another code"
+        code: 409
+        data: |
+          {
+            "available_after": "571250249532"
+          }
+      summary: "sms code already sent, wait before requesting another code. available_after is unix timestamp that specifies the time after which you can resend the code"
+    ErrInvalidCode:
+      value:
+        error: "sms code is invalid"
+        code: 401
+      summary: "sms code is invalid"
+    ErrCodeExpired:
+      value:
+        error: "sms code has expired"
+        code: 401
+      summary: "sms code has expired"
+    ErrInvalidPhone:
+      value:
+        error: "user with this phone does not exist"
+        code: 400
+      summary: "user with this phone does not exist"
+
+paths:
+  /login:
+    get:
+      operationId: LoginUser
+      description: "Logins user"
+      parameters:
+        - in: query
+          name: phone
+          schema:
+            type: string
+            example: "+123456789"
+        - in: query
+          name: code
+          schema:
+            type: string
+            required: true
+            example: "4921"
+        - in: query
+          name: device_id
+          schema:
+            $ref: '#/components/schemas/DeviceId'
+      responses:
+        '200':
+          description: "User logged in"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginOutput'
+        '400':
+          description: "Bad request"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                err1:
+                  $ref: '#/components/examples/ErrInvalidQuery'
+        '401':
+          description: "Unauthorized"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                err1:
+                  $ref: '#/components/examples/ErrCodeExpired'
+                err2:
+                  $ref: '#/components/examples/ErrInvalidCode'
+
+  /refresh:
+    get:
+      parameters:
+        - in: query
+          name: "token"
+          description: "Refresh token. You can get one if you login or refresh"
+          schema:
+            $ref: '#/components/schemas/RefreshToken'
+      operationId: RefreshToken
+      description: "Refreshes JWT refresh token, giving new pair of tokens"
+      responses:
+        '200':
+          description: "Tokens refreshed"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshOutput'
+        '400':
+          description: "Invalid token. See error examples"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                err1:
+                  $ref: '#/components/examples/ErrNoTokenSpecified'
+                err2:
+                  $ref: '#/components/examples/ErrTokenExpired'
+                err3:
+                  $ref: '#/components/examples/ErrInvalidToken'
+                err4:
+                  $ref: '#/components/examples/ErrTokenNotExists'
+
+  /auth:
+    get:
+      parameters:
+        - in: header
+          name: "Authorization"
+          description: "Authorization token. You can get one if you login or refresh"
+          schema:
+            $ref: '#/components/schemas/AccessToken'
+      operationId: IsAuth
+      description: "Checks if user is authenticated and token is valid"
+      responses:
+        '200':
+          description: "User is authenticated, token is still valid"
+        '401':
+          description: "Something wrong with token, so you are not authenticated"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                err1:
+                  $ref: '#/components/examples/ErrTokenExpired'
+                err2:
+                  $ref: '#/components/examples/ErrInvalidToken'
+  /sendcode:
+    get:
+      parameters:
+        - in: query
+          name: phone
+          schema:
+            type: string
+            example: "+123456789"
+        - in: query
+          name: device_id
+          schema:
+            $ref: '#/components/schemas/DeviceId'
+      operationId: SendCode
+      description: "Emulates sending a code to the phone"
+      responses:
+        '201':
+          description: "Status created (code is sent)"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: integer
+                    example: 4096
+        '400':
+          description: "Bad request"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                err1:
+                  $ref: '#/components/examples/ErrInvalidQuery'
+                err2:
+                  $ref: '#/components/examples/ErrInvalidPhone'
+        '409':
+          description: "Code already send, conflict"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                err1:
+                  $ref: '#/components/examples/ErrCodeAlreadySent'
